@@ -1,31 +1,3 @@
-# Kiteticker API Client
-
-Custom Go client for Kiteticker API's
-
-> The Go client to get ticker data from the Kiteticker API.
-
-## Usage Instructions
-
-### Required:
-
-- **userId** : Your kite user_id
-- **password** : Your kite password
-- **totpSecret** : Its a value which you can copy while setting your external 2FA TOTP
-
-#### Obtaining 2FA TOTP Secret
-
-- Set up External 2FA TOTP Auth by going to "My Profile > Settings > Account Security > External 2FA TOTP" and copy the value, while setting.
-
-## Installation
-
-```
-go get github.com/nsvirk/gokiteticker
-```
-
-## Sample code
-
-```go
-
 package main
 
 import (
@@ -169,5 +141,3 @@ func main() {
 	// Start the connection
 	ticker.Serve()
 }
-
-```
