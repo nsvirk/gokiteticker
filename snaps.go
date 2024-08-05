@@ -1,4 +1,6 @@
-package models
+package kiteticker
+
+import "github.com/nsvirk/gokiteticker/models"
 
 // OHLC represents OHLC packets.
 type OHLC struct {
@@ -30,8 +32,8 @@ type Tick struct {
 	IsIndex         bool
 
 	// Timestamp represents Exchange timestamp
-	Timestamp          Time
-	LastTradeTime      Time
+	Timestamp          models.Time
+	LastTradeTime      models.Time
 	LastPrice          float64
 	LastTradedQuantity uint32
 	TotalBuyQuantity   uint32

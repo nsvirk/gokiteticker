@@ -1,4 +1,4 @@
-package kiteconnect
+package kiteticker
 
 import "github.com/nsvirk/gokiteticker/models"
 

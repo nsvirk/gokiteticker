@@ -1,135 +1,55 @@
+// Package main implements a Kite ticker client that subscribes to market data
+// and processes incoming ticks.
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
 	kitesession "github.com/nsvirk/gokitesession"
-	kiteconnect "github.com/nsvirk/gokiteticker/kiteconnect"
-	kitemodels "github.com/nsvirk/gokiteticker/models"
-	kiteticker "github.com/nsvirk/gokiteticker/ticker"
+	kiteticker "github.com/nsvirk/gokiteticker"
 )
 
+// Global variables
 var (
-	// kite user credentials
-	userId     string = os.Getenv("KITE_USER_ID")
-	password   string = os.Getenv("KITE_PASSWORD")
-	totpSecret string = os.Getenv("KITE_TOTP_SECRET")
+	// instTokens is a slice of instrument tokens to subscribe to
+	instTokens = []uint32{256265, 264969, 5633, 779521, 408065, 738561, 895745}
 
-	// kiteticker instrument tokens to subscribe
-	instTokens []uint32 = append([]uint32{}, 256265, 264969, 5633, 779521, 408065, 738561, 895745)
-)
-
-var (
+	// ticker is the main Kite ticker instance
 	ticker *kiteticker.Ticker
 )
 
-// Triggered when any error is raised
-func onError(err error) {
-	fmt.Println("Error: ", err)
+// Config holds the configuration data for the Kite session.
+type Config struct {
+	UserID     string
+	Password   string
+	TOTPSecret string
 }
 
-// Triggered when websocket connection is closed
-func onClose(code int, reason string) {
-	fmt.Println("Close: ", code, reason)
-}
-
-// Triggered when connection is established and ready to send and accept data
-func onConnect() {
-	fmt.Println("Connected")
-	fmt.Println("Subscribing to", instTokens)
-	fmt.Println("--------------------------------------------------------------")
-	fmt.Println("")
-	err := ticker.Subscribe(instTokens)
-	if err != nil {
-		fmt.Println("err: ", err)
-	}
-	// Set subscription mode for given list of tokens
-	// Default mode is Quote
-	err = ticker.SetMode(kiteticker.ModeLTP, instTokens)
-	// err = ticker.SetMode(kiteticker.ModeFull, instTokens)
-	if err != nil {
-		fmt.Println("err: ", err)
-	}
-}
-
-// Triggered when tick is recevived
-func onTick(tick kitemodels.Tick) {
-	// fmt.Println("Tick: ", tick)
-	// tickJson, err := json.MarshalIndent(tick, "", " \t")
-	tickJson, err := json.Marshal(tick)
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println(string(tickJson))
-	fmt.Println("--------------------------------------------------------------")
-}
-
-// Triggered when reconnection is attempted which is enabled by default
-func onReconnect(attempt int, delay time.Duration) {
-	fmt.Printf("Reconnect attempt %d in %fs\n", attempt, delay.Seconds())
-}
-
-// Triggered when maximum number of reconnect attempt is made and the program is terminated
-func onNoReconnect(attempt int) {
-	fmt.Printf("Maximum no of reconnect attempt reached: %d", attempt)
-}
-
-// Triggered when order update is received
-func onOrderUpdate(order kiteconnect.Order) {
-	fmt.Printf("Order: %s", order.OrderID)
-}
-
+// main is the entry point of the application
 func main() {
-
-	// Create a new Kite session instance
-	ks := kitesession.New(userId)
-
-	// Set debug mode
-	ks.SetDebug(true)
-
-	// Generate totp value
-	totpValue, err := ks.GenerateTotpValue(totpSecret)
+	// Get the Kite session
+	session, err := getSession()
 	if err != nil {
-		fmt.Printf("Error generating totp value: %v", err)
-		return
+		log.Fatalf("Failed to get session: %v", err)
 	}
-	// Check the inputs values
-	fmt.Println("--------------------------------------------------------------")
-	fmt.Println("Kite User")
-	fmt.Println("--------------------------------------------------------------")
-	fmt.Println("User ID     	: ", userId)
-	fmt.Println("Password     	: ", password)
-	fmt.Println("Totp Value  	: ", totpValue)
-	fmt.Println("")
-
-	// Get kite session data
-	session, err := ks.GenerateSession(password, totpValue)
-	if err != nil {
-		fmt.Printf("Error generating session: %v", err)
-		return
-	}
-
-	fmt.Println("--------------------------------------------------------------")
-	fmt.Println("Kite Session")
-	fmt.Println("--------------------------------------------------------------")
-	fmt.Println("user_id     	: ", session.UserId)
-	fmt.Println("username   	: ", session.Username)
-	fmt.Println("enctoken    	: ", session.Enctoken[0:36], "...")
-	fmt.Println("login_time  	: ", session.LoginTime)
-	fmt.Println("")
-	// fmt.Println(session)
-
-	fmt.Println("--------------------------------------------------------------")
-	fmt.Println("Kite Ticker")
-	fmt.Println("--------------------------------------------------------------")
 
 	// Create new Kite ticker instance
-	ticker = kiteticker.New(userId, session.Enctoken)
+	ticker = kiteticker.New(session.UserID, session.Enctoken)
 
-	// Assign callbacks
+	// Set up callbacks
+	setupCallbacks()
+
+	// Start the connection
+	ticker.Serve()
+}
+
+// setupCallbacks assigns all the necessary callbacks to the ticker
+func setupCallbacks() {
 	ticker.OnError(onError)
 	ticker.OnClose(onClose)
 	ticker.OnConnect(onConnect)
@@ -137,7 +57,138 @@ func main() {
 	ticker.OnNoReconnect(onNoReconnect)
 	ticker.OnTick(onTick)
 	ticker.OnOrderUpdate(onOrderUpdate)
+}
 
-	// Start the connection
-	ticker.Serve()
+// onError is triggered when any error is raised
+func onError(err error) {
+	log.Printf("Error: %v", err)
+}
+
+// onClose is triggered when websocket connection is closed
+func onClose(code int, reason string) {
+	log.Printf("Connection closed: code=%d, reason=%s", code, reason)
+}
+
+// onConnect is triggered when connection is established and ready to send and accept data
+func onConnect() {
+	log.Println("Connected")
+	log.Printf("Subscribing to %v", instTokens)
+	log.Println("--------------------------------------------------------------")
+
+	if err := ticker.Subscribe(instTokens); err != nil {
+		log.Printf("Subscription error: %v", err)
+		return
+	}
+
+	// Set subscription mode for given list of tokens
+	// Default mode is Quote
+	if err := ticker.SetMode(kiteticker.ModeLTP, instTokens); err != nil {
+		log.Printf("SetMode error: %v", err)
+	}
+}
+
+// onTick is triggered when a tick is received
+func onTick(tick kiteticker.Tick) {
+	tickJSON, err := json.Marshal(tick)
+	if err != nil {
+		log.Printf("Error marshalling tick: %v", err)
+		return
+	}
+
+	printTicks(tickJSON)
+}
+
+// onReconnect is triggered when reconnection is attempted
+func onReconnect(attempt int, delay time.Duration) {
+	log.Printf("Reconnect attempt %d in %.2fs", attempt, delay.Seconds())
+}
+
+// onNoReconnect is triggered when maximum number of reconnect attempts is reached
+func onNoReconnect(attempt int) {
+	log.Printf("Maximum number of reconnect attempts reached: %d", attempt)
+}
+
+// onOrderUpdate is triggered when an order update is received
+func onOrderUpdate(order kiteticker.Order) {
+	log.Printf("Order update received: OrderID=%s", order.OrderID)
+}
+
+// getSession retrieves the Kite session
+func getSession() (*kitesession.Session, error) {
+	config, err := getConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get config: %w", err)
+	}
+
+	ks := kitesession.New()
+	ks.SetDebug(false)
+
+	totpValue, err := kitesession.GenerateTOTPValue(config.TOTPSecret)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate TOTP value: %w", err)
+	}
+
+	printInputValues(config.UserID, config.Password, totpValue)
+
+	session, err := ks.GenerateSession(config.UserID, config.Password, totpValue)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate session: %w", err)
+	}
+
+	printSessionInfo(session)
+
+	return session, nil
+}
+
+// getConfig retrieves the configuration from environment variables
+func getConfig() (*Config, error) {
+	userID := os.Getenv("KITE_USER_ID")
+	password := os.Getenv("KITE_PASSWORD")
+	totpSecret := os.Getenv("KITE_TOTP_SECRET")
+
+	if userID == "" || password == "" || totpSecret == "" {
+		return nil, fmt.Errorf("KITE_USER_ID, KITE_PASSWORD, and KITE_TOTP_SECRET environment variables must be set")
+	}
+
+	return &Config{
+		UserID:     userID,
+		Password:   password,
+		TOTPSecret: totpSecret,
+	}, nil
+}
+
+// printInputValues prints the input values used for authentication
+func printInputValues(userID, password, totpValue string) {
+	log.Println("--------------------------------------------------------------")
+	log.Println("User Inputs")
+	log.Println("--------------------------------------------------------------")
+	log.Printf("User ID      : %s", userID)
+	log.Printf("Password     : %s", password)
+	log.Printf("TOTP Value   : %s\n", totpValue)
+}
+
+// printSessionInfo prints the session information
+func printSessionInfo(session *kitesession.Session) {
+	log.Println("--------------------------------------------------------------")
+	log.Println("Kite Session")
+	log.Println("--------------------------------------------------------------")
+	log.Printf("user_id      : %s", session.UserID)
+	log.Printf("enctoken     : %s", session.Enctoken)
+	log.Printf("login_time   : %s", session.LoginTime)
+}
+
+// printTicks prints the ticker information
+func printTicks(tickJSON []byte) {
+	log.Println("--------------------------------------------------------------")
+	log.Println("Tick Data")
+	log.Println("--------------------------------------------------------------")
+
+	var prettyJSON bytes.Buffer
+	if err := json.Indent(&prettyJSON, tickJSON, "", "\t"); err != nil {
+		log.Printf("Error processing tick data: %v", err)
+		return
+	}
+
+	log.Println(prettyJSON.String())
+	log.Println("--------------------------------------------------------------")
 }
