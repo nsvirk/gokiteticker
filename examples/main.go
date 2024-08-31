@@ -12,6 +12,7 @@ import (
 
 	kitesession "github.com/nsvirk/gokitesession"
 	kiteticker "github.com/nsvirk/gokiteticker"
+	kitemodels "github.com/nsvirk/gokiteticker/models"
 )
 
 // Global variables
@@ -38,14 +39,24 @@ func main() {
 		log.Fatalf("Failed to get session: %v", err)
 	}
 
+	// Get the userId and enctoken from the session
+	userId := session.UserID
+	enctoken := session.Enctoken
+
 	// Create new Kite ticker instance
-	ticker = kiteticker.New(session.UserID, session.Enctoken)
+	ticker = kiteticker.New(userId, enctoken)
 
 	// Set up callbacks
 	setupCallbacks()
 
 	// Start the connection
+	// Serve starts the connection to ticker server. Since its blocking its
+	// recommended to use it in a go routine.
 	ticker.Serve()
+
+	// Alternatively, you can use ServeWithContext to start the connection
+	// go ticker.ServeWithContext(context.Background())
+	// select {}
 }
 
 // setupCallbacks assigns all the necessary callbacks to the ticker
@@ -88,7 +99,7 @@ func onConnect() {
 }
 
 // onTick is triggered when a tick is received
-func onTick(tick kiteticker.Tick) {
+func onTick(tick kitemodels.Tick) {
 	tickJSON, err := json.Marshal(tick)
 	if err != nil {
 		log.Printf("Error marshalling tick: %v", err)
