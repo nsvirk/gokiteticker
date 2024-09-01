@@ -93,6 +93,8 @@ const (
 
 	// ModeLTP subscribes for last price.
 	ModeLTP Mode = "ltp"
+	// ModeQuote represents ltpc mode.
+	ModeLTPC Mode = "ltpc"
 	// ModeFull subscribes for all the available fields.
 	ModeFull Mode = "full"
 	// ModeQuote represents quote mode.
@@ -123,6 +125,7 @@ const (
 
 	// packet length for each mode.
 	modeLTPLength              = 8
+	modeLTPCLength             = 12
 	modeQuoteIndexPacketLength = 28
 	modeFullIndexLength        = 32
 	modeQuoteLength            = 44
@@ -555,6 +558,7 @@ func (t *Ticker) Resubscribe() error {
 		ModeFull:  {},
 		ModeQuote: {},
 		ModeLTP:   {},
+		ModeLTPC:  {},
 	}
 
 	// Make a map of mode and corresponding tokens
@@ -664,6 +668,20 @@ func parsePacket(b []byte) (models.Tick, error) {
 			IsTradable:      isTradable,
 			IsIndex:         isIndex,
 			LastPrice:       convertPrice(seg, float64(binary.BigEndian.Uint32(b[4:8]))),
+		}, nil
+	}
+
+	// Mode LTPC parsing
+	if len(b) == modeLTPCLength {
+		return models.Tick{
+			Mode:            string(ModeLTPC),
+			InstrumentToken: tk,
+			IsTradable:      isTradable,
+			IsIndex:         isIndex,
+			LastPrice:       convertPrice(seg, float64(binary.BigEndian.Uint32(b[4:8]))),
+			OHLC: models.OHLC{
+				Close: convertPrice(seg, float64(binary.BigEndian.Uint32(b[8:12]))),
+			},
 		}, nil
 	}
 

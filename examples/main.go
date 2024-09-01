@@ -18,7 +18,8 @@ import (
 // Global variables
 var (
 	// instTokens is a slice of instrument tokens to subscribe to
-	instTokens = []uint32{256265, 264969, 5633, 779521, 408065, 738561, 895745}
+	// instTokens = []uint32{256265, 264969, 5633, 779521, 408065, 738561, 895745}
+	instTokens = []uint32{738561}
 
 	// ticker is the main Kite ticker instance
 	ticker *kiteticker.Ticker
@@ -93,7 +94,7 @@ func onConnect() {
 
 	// Set subscription mode for given list of tokens
 	// Default mode is Quote
-	if err := ticker.SetMode(kiteticker.ModeLTP, instTokens); err != nil {
+	if err := ticker.SetMode(kiteticker.ModeLTPC, instTokens); err != nil {
 		log.Printf("SetMode error: %v", err)
 	}
 }
